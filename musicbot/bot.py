@@ -628,6 +628,7 @@ class MusicBot(discord.Client):
     async def on_player_resume(self, player, entry, **_):
         await self.update_now_playing_status(entry)
 
+
     async def on_player_pause(self, player, entry, **_):
         await self.update_now_playing_status(entry, True)
         # await self.serialize_queue(player.voice_client.channel.server)
@@ -1294,8 +1295,35 @@ class MusicBot(discord.Client):
         Adds the song to the playlist.  If a link is not provided, the first
         result from a youtube search is added to the queue.
         """
-
+        
         song_url = song_url.strip('<>')
+        fullPath = song_url+" " + ' '.join(leftover_args)
+        fullPath = fullPath.strip('"')
+        print(fullPath)
+        #print(os.path.exists(fullPath))
+        
+        if os.path.exists(fullPath): #check if given url is a path in file system.
+            print("found local song")
+            head, tail = os.path.split(fullPath)
+            print(head, tail)
+            self.downloader = downloader.Downloader(download_folder=head) #redudant?
+            player.playlist.downloader = self.downloader #redudant?
+            
+            if(os.path.isfile(fullPath)): #playing a file adds the file to the playlist.
+                entry, position = await player.playlist.add_entry_local(fullPath, channel=channel, author=author)
+            elif(os.path.isdir(fullPath)): #playing a folder adds whole content to playlist
+                for file in os.listdir(fullPath):
+                    if file.endswith((".mp3", ".wav", ".flac", ".ogg", ".wma")):
+                        entry, position = await player.playlist.add_entry_local(os.path.join(fullPath, file), channel=channel, author=author)
+            return Response("playing local", delete_after=30)
+        
+        self.downloader = downloader.Downloader(download_folder='audio_cache')
+        player.playlist.downloader = self.downloader
+        
+        if permissions.max_songs and player.playlist.count_for_user(author) >= permissions.max_songs:
+            raise exceptions.PermissionsError(
+                "You have reached your enqueued song limit (%s)" % permissions.max_songs, expire_in=30
+            )
 
         await self.send_typing(channel)
 
@@ -1492,7 +1520,6 @@ class MusicBot(discord.Client):
         """
         Secret handler to use the async wizardry to make playlist queuing non-"blocking"
         """
-
         await self.send_typing(channel)
         info = await self.downloader.extract_info(player.playlist.loop, playlist_url, download=False, process=False)
 
@@ -2139,6 +2166,40 @@ class MusicBot(discord.Client):
 
         return Response("\N{OPEN MAILBOX WITH RAISED FLAG}", delete_after=20)
 
+        
+    async def cmd_mpaths(self,server,author, leftover_args, path = '.'):
+        """
+        Usage:
+            {command_prefix}mpaths path
+
+        Queries folders for local music
+        """
+        songs = u''
+        baseList = self.config.musicPaths.split(",")
+        
+        if path == '.':
+            path = baseList[0].replace(r"\\", "\\")
+            
+        fullPath = path+" " + ' '.join(leftover_args)  
+        fullPath = fullPath.strip()
+        fileList = os.listdir(fullPath)        
+        print(fileList)
+            
+        songs += "directories \n"
+        
+        for dir in baseList:
+            for object in fileList:
+                if os.path.isdir(os.path.join(dir,object)):
+                    songs += os.path.join(fullPath,object) + u'\\\n'        
+        songs += u"\n files \n"
+        
+        for dir in baseList:
+            for object in fileList:
+                if object.endswith((".mp3", ".wav", ".flac", ".ogg", ".wma")):
+                    songs += fullPath + u'\\\\' + object + u'\n'
+                        
+        return Response('\n' + songs, delete_after=120)
+        
     async def cmd_listids(self, server, author, leftover_args, cat='all'):
         """
         Usage:

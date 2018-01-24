@@ -101,6 +101,27 @@ class Playlist(EventEmitter, Serializable):
         )
         self._add_entry(entry)
         return entry, len(self.entries)
+        
+    async def add_entry_local(self, path, **meta):
+        """
+            adds a local file to be played.
+
+            Returns the entry & the position it is in the queue.
+
+            :param path: The song path to add to the playlist.
+            :param meta: Any additional metadata to add to the playlist entry.
+        """
+        head, tail = os.path.split(path)
+        entry = URLPlaylistEntry(
+            self,
+            path,
+            "untitled",
+            100,
+            tail,
+            **meta
+        )
+        self._add_entry(entry)
+        return entry, len(self.entries)
 
     async def add_stream_entry(self, song_url, info=None, **meta):
         if info is None:
@@ -353,4 +374,3 @@ class Playlist(EventEmitter, Serializable):
 
         # TODO: create a function to init downloading (since we don't do it here)?
         return pl
-
